@@ -1,0 +1,51 @@
+{
+  "input_features": [
+    "Temperature_C",
+    "Humidity_pct",
+    "Wind_Speed_ms",
+    "Pressure_hPa",
+    "Solar_Radiation_Wm2",
+    "Dew_Point_C",
+    "Precipitation_mm",
+    "Cloud_Cover_pct",
+    "hour_sin",
+    "hour_cos",
+    "month_sin",
+    "month_cos",
+    "dow_sin",
+    "dow_cos"
+  ],
+  "targets": [
+    "Temp_1h_Ahead_C",
+    "Temp_3h_Ahead_C",
+    "Temp_6h_Ahead_C"
+  ],
+  "lookback": 168,
+  "raw_features": [
+    "Temperature_C",
+    "Humidity_pct",
+    "Wind_Speed_ms",
+    "Pressure_hPa",
+    "Solar_Radiation_Wm2",
+    "Dew_Point_C",
+    "Precipitation_mm",
+    "Cloud_Cover_pct"
+  ],
+  "metrics": {
+    "1h Ahead": {
+      "RMSE": 1.8472,
+      "MAE": 1.438,
+      "R2": 0.9611
+    },
+    "3h Ahead": {
+      "RMSE": 1.9305,
+      "MAE": 1.5121,
+      "R2": 0.9575
+    },
+    "6h Ahead": {
+      "RMSE": 2.0366,
+      "MAE": 1.597,
+      "R2": 0.9527
+    }
+  }
+}

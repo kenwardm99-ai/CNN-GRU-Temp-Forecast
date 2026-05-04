@@ -3,7 +3,7 @@ CNN-GRU Temperature Forecasting — Streamlit App
 With automatic weather fetching from Open-Meteo (free, no API key needed)
 ================================================
 Place these files in the SAME folder as this app.py:
-    cnn_gru_model.keras
+    cnn_gru_model.onnx
     scaler_X.pkl
     scaler_y.pkl
     model_config.json
@@ -146,8 +146,12 @@ def fetch_weather_open_meteo(date: datetime.date, hour: int,
 # ════════════════════════════════════════════════════════════
 @st.cache_resource(show_spinner="Loading CNN-GRU model…")
 def load_model():
-    import tensorflow as tf
-    return tf.keras.models.load_model("cnn_gru_model.keras")
+    import onnxruntime as ort
+    sess = ort.InferenceSession(
+        "cnn_gru_model.onnx",
+        providers=["CPUExecutionProvider"]
+    )
+    return sess
 
 @st.cache_resource(show_spinner=False)
 def load_scalers():
@@ -210,7 +214,9 @@ def build_sequence(df_hist, current_row, scaler_X, lookback=168):
     return arr_sc[np.newaxis, ...]
 
 def run_inference(seq, model, scaler_y):
-    pred_sc = model.predict(seq, verbose=0)
+    input_name  = model.get_inputs()[0].name
+    output_name = model.get_outputs()[0].name
+    pred_sc = model.run([output_name], {input_name: seq.astype(np.float32)})[0]
     pred    = scaler_y.inverse_transform(pred_sc)
     return float(pred[0,0]), float(pred[0,1]), float(pred[0,2])
 
@@ -312,7 +318,7 @@ def main():
     except FileNotFoundError as e:
         st.warning(
             f"⚠️ **Demo Mode** — artefact not found: `{e}`\n\n"
-            "Copy `cnn_gru_model.keras`, `scaler_X.pkl`, `scaler_y.pkl`, "
+            "Copy `cnn_gru_model.onnx`, `scaler_X.pkl`, `scaler_y.pkl`, "
             "`model_config.json` into the same folder as `app.py`."
         )
         model_ok = False
@@ -411,27 +417,27 @@ def main():
         )
 
         temp  = st.number_input("Temperature (°C)",
-                                -5.0,  50.0,
+                                -30.0, 60.0,
                                 float(fd.get("Temperature_C",       22.5)), 0.1)
         hum   = st.number_input("Relative Humidity (%)",
-                                10.0, 100.0,
+                                0.0, 100.0,
                                 float(fd.get("Humidity_pct",        65.0)), 0.5)
         dew   = st.number_input("Dew Point (°C)",
-                                -10.0, 40.0,
+                                -40.0, 50.0,
                                 float(fd.get("Dew_Point_C",         15.0)), 0.1)
         wind  = st.number_input("Wind Speed (m/s)",
-                                0.0,  30.0,
+                                0.0,  80.0,
                                 float(fd.get("Wind_Speed_ms",        3.5)), 0.1)
         pres  = st.number_input("Pressure (hPa)",
-                                950.0, 1050.0,
+                                800.0, 1100.0,
                                 float(fd.get("Pressure_hPa",      1013.0)), 0.5)
         solar = st.number_input("Solar Radiation (W/m²)",
-                                0.0,  1000.0,
+                                0.0,  1500.0,
                                 float(fd.get("Solar_Radiation_Wm2", 350.0)), 5.0)
         cloud = st.slider("Cloud Cover (%)", 0, 100,
                           int(fd.get("Cloud_Cover_pct", 40)))
         rain  = st.number_input("Precipitation (mm)",
-                                0.0,  100.0,
+                                0.0,  500.0,
                                 float(fd.get("Precipitation_mm",    0.0)), 0.1)
 
         st.markdown("---")

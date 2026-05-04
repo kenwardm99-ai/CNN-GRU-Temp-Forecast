@@ -411,27 +411,27 @@ def main():
         )
 
         temp  = st.number_input("Temperature (°C)",
-                                -30.0, 60.0,
+                                -5.0,  50.0,
                                 float(fd.get("Temperature_C",       22.5)), 0.1)
         hum   = st.number_input("Relative Humidity (%)",
-                                0.0, 100.0,
+                                10.0, 100.0,
                                 float(fd.get("Humidity_pct",        65.0)), 0.5)
         dew   = st.number_input("Dew Point (°C)",
-                                -40.0, 50.0,
+                                -10.0, 40.0,
                                 float(fd.get("Dew_Point_C",         15.0)), 0.1)
         wind  = st.number_input("Wind Speed (m/s)",
-                                0.0,  80.0,
+                                0.0,  30.0,
                                 float(fd.get("Wind_Speed_ms",        3.5)), 0.1)
         pres  = st.number_input("Pressure (hPa)",
-                                800.0, 1100.0,
+                                950.0, 1050.0,
                                 float(fd.get("Pressure_hPa",      1013.0)), 0.5)
         solar = st.number_input("Solar Radiation (W/m²)",
-                                0.0,  1500.0,
+                                0.0,  1000.0,
                                 float(fd.get("Solar_Radiation_Wm2", 350.0)), 5.0)
         cloud = st.slider("Cloud Cover (%)", 0, 100,
                           int(fd.get("Cloud_Cover_pct", 40)))
         rain  = st.number_input("Precipitation (mm)",
-                                0.0,  500.0,
+                                0.0,  100.0,
                                 float(fd.get("Precipitation_mm",    0.0)), 0.1)
 
         st.markdown("---")

@@ -8,20 +8,20 @@ Place these files in the SAME folder as this app.py:
     scaler_y.pkl
     model_config.json
     Weather.csv
- 
+
 Run with:
     streamlit run app.py
 """
- 
+
 import json, pickle, datetime, warnings, requests
 warnings.filterwarnings("ignore")
- 
+
 import numpy as np
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
- 
+
 # ── Page config ──────────────────────────────────────────────
 st.set_page_config(
     page_title="CNN-GRU Temperature Forecast",
@@ -29,13 +29,13 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
- 
+
 # ── Colours ──────────────────────────────────────────────────
 C_NAVY   = "#1F4E79"
 C_BLUE   = "#2E75B6"
 C_GREEN  = "#70AD47"
 C_ORANGE = "#ED7D31"
- 
+
 # ── CSS ──────────────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -74,8 +74,8 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
- 
- 
+
+
 # ════════════════════════════════════════════════════════════
 # OPEN-METEO WEATHER FETCHER
 # ════════════════════════════════════════════════════════════
@@ -107,16 +107,16 @@ def fetch_weather_open_meteo(date: datetime.date, hour: int,
         ]),
         "timezone": "Africa/Harare",
     }
- 
+
     try:
         resp = requests.get(url, params=params, timeout=10)
         resp.raise_for_status()
         data = resp.json()
         hourly = data.get("hourly", {})
- 
+
         # Get the value at the requested hour index
         idx = hour  # hour 0-23 maps directly to index 0-23
- 
+
         result = {
             "Temperature_C":       round(hourly["temperature_2m"][idx], 2),
             "Humidity_pct":        round(hourly["relativehumidity_2m"][idx], 1),
@@ -128,7 +128,7 @@ def fetch_weather_open_meteo(date: datetime.date, hour: int,
             "Cloud_Cover_pct":     int(hourly["cloudcover"][idx]),
         }
         return result, None  # data, no error
- 
+
     except requests.exceptions.ConnectionError:
         return None, "No internet connection. Please check your network."
     except requests.exceptions.Timeout:
@@ -139,8 +139,8 @@ def fetch_weather_open_meteo(date: datetime.date, hour: int,
         return None, f"Unexpected API response format: {e}"
     except Exception as e:
         return None, f"Unexpected error: {e}"
- 
- 
+
+
 # ════════════════════════════════════════════════════════════
 # MODEL ARTEFACT LOADERS
 # ════════════════════════════════════════════════════════════
@@ -148,26 +148,26 @@ def fetch_weather_open_meteo(date: datetime.date, hour: int,
 def load_model():
     import tensorflow as tf
     return tf.keras.models.load_model("cnn_gru_model.keras")
- 
+
 @st.cache_resource(show_spinner=False)
 def load_scalers():
     with open("scaler_X.pkl", "rb") as f: sx = pickle.load(f)
     with open("scaler_y.pkl", "rb") as f: sy = pickle.load(f)
     return sx, sy
- 
+
 @st.cache_resource(show_spinner=False)
 def load_config():
     with open("model_config.json") as f:
         return json.load(f)
- 
+
 @st.cache_data(show_spinner=False)
 def load_history():
     df = pd.read_csv("Weather.csv", parse_dates=["Timestamp"])
     df.sort_values("Timestamp", inplace=True)
     df.reset_index(drop=True, inplace=True)
     return df
- 
- 
+
+
 # ════════════════════════════════════════════════════════════
 # FEATURE ENGINEERING
 # ════════════════════════════════════════════════════════════
@@ -176,7 +176,7 @@ INPUT_FEATURES = [
     "Solar_Radiation_Wm2", "Dew_Point_C", "Precipitation_mm", "Cloud_Cover_pct",
     "hour_sin", "hour_cos", "month_sin", "month_cos", "dow_sin", "dow_cos"
 ]
- 
+
 def make_feature_row(ts, temp, hum, wind, pres, solar, dew, rain, cloud):
     return {
         "Temperature_C":       temp,
@@ -194,7 +194,7 @@ def make_feature_row(ts, temp, hum, wind, pres, solar, dew, rain, cloud):
         "dow_sin":   np.sin(2*np.pi*ts.weekday()/7),
         "dow_cos":   np.cos(2*np.pi*ts.weekday()/7),
     }
- 
+
 def build_sequence(df_hist, current_row, scaler_X, lookback=168):
     hist = df_hist.tail(lookback - 1).copy()
     hist["hour_sin"]  = np.sin(2*np.pi*hist["Hour"]/24)
@@ -208,13 +208,13 @@ def build_sequence(df_hist, current_row, scaler_X, lookback=168):
     arr    = np.array(rows, dtype=np.float32)
     arr_sc = scaler_X.transform(arr)
     return arr_sc[np.newaxis, ...]
- 
+
 def run_inference(seq, model, scaler_y):
     pred_sc = model.predict(seq, verbose=0)
     pred    = scaler_y.inverse_transform(pred_sc)
     return float(pred[0,0]), float(pred[0,1]), float(pred[0,2])
- 
- 
+
+
 # ════════════════════════════════════════════════════════════
 # PLOT HELPERS
 # ════════════════════════════════════════════════════════════
@@ -231,7 +231,7 @@ def plot_recent(df_hist):
     ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
     plt.xticks(rotation=25)
     fig.tight_layout(); return fig
- 
+
 def plot_forecast_bar(t1h, t3h, t6h, t_input):
     labels = ["Yesterday\n(Input)", "+1 Hour", "+3 Hours", "+6 Hours"]
     values = [t_input, t1h, t3h, t6h]
@@ -250,7 +250,7 @@ def plot_forecast_bar(t1h, t3h, t6h, t_input):
     ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
     ax.grid(axis="y", alpha=0.3, zorder=0)
     fig.tight_layout(); return fig
- 
+
 def plot_diurnal(df_hist):
     h = df_hist.groupby("Hour")["Temperature_C"].agg(["mean","std"])
     fig, ax = plt.subplots(figsize=(7, 3.5))
@@ -262,7 +262,7 @@ def plot_diurnal(df_hist):
     ax.set_xticks(range(0, 24, 3))
     ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
     fig.tight_layout(); return fig
- 
+
 def plot_monthly(df_hist):
     mnames = ["Jan","Feb","Mar","Apr","May","Jun",
                "Jul","Aug","Sep","Oct","Nov","Dec"]
@@ -279,13 +279,13 @@ def plot_monthly(df_hist):
     ax.set_xlabel("Month"); ax.set_ylabel("Temperature (°C)")
     ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
     fig.tight_layout(); return fig
- 
- 
+
+
 # ════════════════════════════════════════════════════════════
 # MAIN APP
 # ════════════════════════════════════════════════════════════
 def main():
- 
+
     # ── Header ───────────────────────────────────────────────
     st.markdown(f"""
     <div style='background:linear-gradient(135deg,{C_NAVY},{C_BLUE});
@@ -300,7 +300,7 @@ def main():
         </p>
     </div>
     """, unsafe_allow_html=True)
- 
+
     # ── Load artefacts ───────────────────────────────────────
     model_ok = True
     try:
@@ -319,7 +319,7 @@ def main():
         LOOKBACK = 168
         try:    df_hist = load_history()
         except: df_hist = None
- 
+
     # ── Session state for auto-fetched values ────────────────
     if "weather_fetched" not in st.session_state:
         st.session_state.weather_fetched = False
@@ -327,11 +327,11 @@ def main():
         st.session_state.fetched_data = {}
     if "fetch_status" not in st.session_state:
         st.session_state.fetch_status = ""
- 
+
     # ── Sidebar ──────────────────────────────────────────────
     with st.sidebar:
         st.markdown("## 📅 Select Date & Time")
- 
+
         obs_date = st.date_input(
             "Date to forecast from",
             value=datetime.date.today() - datetime.timedelta(days=1),
@@ -342,9 +342,9 @@ def main():
             "Observation Hour", 0, 23, 15,
             help="Which hour of that day to use as input"
         )
- 
+
         st.markdown("---")
- 
+
         # ── AUTO-FETCH BUTTON ─────────────────────────────────
         st.markdown("### 🌐 Auto-Fetch Weather")
         st.markdown(
@@ -352,7 +352,7 @@ def main():
             "selected date from Open-Meteo (free, no login needed)</small>",
             unsafe_allow_html=True
         )
- 
+
         # Location selector
         location = st.selectbox(
             "Location",
@@ -360,20 +360,20 @@ def main():
              "Custom coordinates"],
             index=0
         )
- 
+
         coords = {
             "Harare, Zimbabwe":    (-17.8252,  31.0335),
             "Bulawayo, Zimbabwe":  (-20.1325,  28.6264),
         }
- 
+
         if location == "Custom coordinates":
             lat = st.number_input("Latitude",  -90.0,  90.0, -17.8252, 0.0001)
             lon = st.number_input("Longitude", -180.0, 180.0, 31.0335,  0.0001)
         else:
             lat, lon = coords[location]
- 
+
         fetch_btn = st.button("🌐 Fetch Weather Automatically")
- 
+
         if fetch_btn:
             with st.spinner(f"Fetching weather for {obs_date} {obs_hour}:00…"):
                 data, err = fetch_weather_open_meteo(obs_date, obs_hour, lat, lon)
@@ -384,7 +384,7 @@ def main():
             else:
                 st.session_state.weather_fetched = False
                 st.session_state.fetch_status    = err
- 
+
         # Show fetch status
         if st.session_state.fetch_status == "success":
             st.markdown(
@@ -397,19 +397,19 @@ def main():
                 f"<div class='fetch-error'>❌ {st.session_state.fetch_status}</div>",
                 unsafe_allow_html=True
             )
- 
+
         st.markdown("---")
- 
+
         # ── Weather input fields — pre-filled if fetched ──────
         fd = st.session_state.fetched_data
- 
+
         st.markdown("### 🌡️ Weather Conditions")
         st.markdown(
             "<small style='color:#ccc;'>Auto-filled from Open-Meteo "
             "or enter manually</small>",
             unsafe_allow_html=True
         )
- 
+
         temp  = st.number_input("Temperature (°C)",
                                 -30.0, 60.0,
                                 float(fd.get("Temperature_C",       22.5)), 0.1)
@@ -433,21 +433,21 @@ def main():
         rain  = st.number_input("Precipitation (mm)",
                                 0.0,  500.0,
                                 float(fd.get("Precipitation_mm",    0.0)), 0.1)
- 
+
         st.markdown("---")
         predict_btn = st.button("🔮 Predict Temperature")
- 
+
     # ── Tabs ─────────────────────────────────────────────────
     tab_pred, tab_eda, tab_model = st.tabs(
         ["🔮 Forecast", "📊 Data Explorer", "📈 Model Performance"]
     )
- 
+
     # ════════════════════════════════════════════════════════
     # TAB 1 — FORECAST
     # ════════════════════════════════════════════════════════
     with tab_pred:
         col_info, col_plot = st.columns([1, 1.6])
- 
+
         with col_info:
             st.markdown('<div class="section-hdr">📍 How It Works</div>',
                         unsafe_allow_html=True)
@@ -461,7 +461,7 @@ def main():
    - **+3 Hours** → Short-term
    - **+6 Hours** → Extended
             """)
- 
+
             st.markdown('<div class="section-hdr">⚙️ Model Status</div>',
                         unsafe_allow_html=True)
             if model_ok:
@@ -471,14 +471,14 @@ def main():
                 st.markdown("**Architecture:** Conv1D×2 → MaxPool → GRU×2 → Dense")
             else:
                 st.error("⚠️ Demo Mode — model artefacts not found")
- 
+
             if st.session_state.weather_fetched:
                 st.markdown('<div class="section-hdr">🌐 Fetched Weather</div>',
                             unsafe_allow_html=True)
                 fd2 = st.session_state.fetched_data
                 for k, v in fd2.items():
                     st.markdown(f"**{k.replace('_',' ')}:** {v}")
- 
+
         with col_plot:
             st.markdown('<div class="section-hdr">📉 Recent 7-Day History</div>',
                         unsafe_allow_html=True)
@@ -486,7 +486,7 @@ def main():
                 st.pyplot(plot_recent(df_hist), use_container_width=True)
             else:
                 st.info("Place Weather.csv in the app folder to see history.")
- 
+
         # ── Prediction section ────────────────────────────
         if predict_btn:
             ts_obs = pd.Timestamp(
@@ -495,10 +495,10 @@ def main():
             current_row = make_feature_row(
                 ts_obs, temp, hum, wind, pres, solar, dew, rain, cloud
             )
- 
+
             src = "Open-Meteo real data" if st.session_state.weather_fetched \
                   else "manually entered data"
- 
+
             with st.spinner("Running CNN-GRU inference…"):
                 if model_ok and df_hist is not None:
                     seq = build_sequence(df_hist, current_row,
@@ -509,9 +509,9 @@ def main():
                     t1h = temp + np.random.normal(0.4, 0.5)
                     t3h = temp + np.random.normal(1.2, 0.8)
                     t6h = temp + np.random.normal(2.5, 1.2)
- 
+
             st.success(f"✅ Forecast complete! (Input source: {src})")
- 
+
             st.markdown('<div class="section-hdr">🔮 Forecast Results</div>',
                         unsafe_allow_html=True)
             c1, c2, c3 = st.columns(3)
@@ -532,10 +532,10 @@ def main():
     {arrow} {abs(delta):.1f}°C vs input
   </div>
 </div>""", unsafe_allow_html=True)
- 
+
             st.pyplot(plot_forecast_bar(t1h, t3h, t6h, temp),
                       use_container_width=True)
- 
+
             trend = "RISING"  if t6h > temp + 0.5 else \
                     "FALLING" if t6h < temp - 0.5 else "STABLE"
             st.info(
@@ -543,7 +543,7 @@ def main():
                 f"forecast: **{t1h:.1f}°C** (+1h) → **{t3h:.1f}°C** (+3h) → "
                 f"**{t6h:.1f}°C** (+6h). Trend: **{trend}**."
             )
- 
+
         else:
             if not st.session_state.weather_fetched:
                 st.markdown(
@@ -560,7 +560,7 @@ def main():
                     "<b>🔮 Predict Temperature</b></div>",
                     unsafe_allow_html=True
                 )
- 
+
     # ════════════════════════════════════════════════════════
     # TAB 2 — DATA EXPLORER
     # ════════════════════════════════════════════════════════
@@ -575,13 +575,13 @@ def main():
             m2.metric("Mean Temperature", f"{df_hist['Temperature_C'].mean():.1f}°C")
             m3.metric("Min Temperature",  f"{df_hist['Temperature_C'].min():.1f}°C")
             m4.metric("Max Temperature",  f"{df_hist['Temperature_C'].max():.1f}°C")
- 
+
             st.markdown('<div class="section-hdr">🌡️ Seasonal & Diurnal Patterns</div>',
                         unsafe_allow_html=True)
             ca, cb = st.columns(2)
             with ca: st.pyplot(plot_monthly(df_hist), use_container_width=True)
             with cb: st.pyplot(plot_diurnal(df_hist), use_container_width=True)
- 
+
             st.markdown('<div class="section-hdr">🗂️ Raw Data Preview</div>',
                         unsafe_allow_html=True)
             yr = st.selectbox(
@@ -590,7 +590,7 @@ def main():
             )
             show = df_hist if yr == "All" else df_hist[df_hist["Year"]==int(yr)]
             st.dataframe(show.tail(200), use_container_width=True)
- 
+
     # ════════════════════════════════════════════════════════
     # TAB 3 — MODEL PERFORMANCE
     # ════════════════════════════════════════════════════════
@@ -611,7 +611,7 @@ def main():
   MAE: <b>{m["MAE"]}°C</b> &nbsp;|&nbsp;
   R²: <b>{m["R²"]}</b>
 </div>""", unsafe_allow_html=True)
- 
+
         st.markdown('<div class="section-hdr">🏗️ Architecture Summary</div>',
                     unsafe_allow_html=True)
         arch = pd.DataFrame({
@@ -629,7 +629,7 @@ def main():
                      "Forecast +1h, +3h, +6h"],
         })
         st.dataframe(arch, use_container_width=True, hide_index=True)
- 
+
         st.markdown('<div class="section-hdr">⚙️ Training Configuration</div>',
                     unsafe_allow_html=True)
         cfg = pd.DataFrame({
@@ -643,7 +643,7 @@ def main():
                           "2023-07-01 → 2023-12-31"],
         })
         st.dataframe(cfg, use_container_width=True, hide_index=True)
- 
+
     # ── Footer ───────────────────────────────────────────────
     st.markdown("""<hr>
 <div style='text-align:center;color:#888;font-size:0.85rem;padding:8px 0;'>
@@ -652,7 +652,7 @@ def main():
   Department of Computer Science &nbsp;|&nbsp; 2024 &nbsp;|&nbsp;
   Weather data: <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>
 </div>""", unsafe_allow_html=True)
- 
- 
+
+
 if __name__ == "__main__":
     main()

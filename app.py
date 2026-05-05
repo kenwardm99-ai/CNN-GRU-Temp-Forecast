@@ -145,52 +145,67 @@ div[data-testid="stButton"] > button:hover {{ opacity: 0.88; }}
 [data-testid="stDataFrame"] {{ font-size: 0.78rem !important; }}
 
 
-/* ── SIDEBAR balanced spacing ── */
+
+
+/* ── SIDEBAR SPACING ─────────────────────────────────────── */
+/* Reduce top padding so content starts higher */
 section[data-testid="stSidebar"] > div:first-child {{
-    padding-top: 0.3rem !important;
+    padding-top: 0.5rem !important;
 }}
-[data-testid="stSidebar"] .block-container {{
-    padding-top: 0.2rem !important;
-    padding-bottom: 0.5rem !important;
-}}
-[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {{
-    gap: 0.15rem !important;
-}}
-[data-testid="stSidebar"] .stSlider {{
-    padding-bottom: 0 !important;
-    margin-bottom: 0 !important;
-}}
-[data-testid="stSidebar"] hr {{
-    margin-top: 6px !important;
-    margin-bottom: 6px !important;
-    border-color: rgba(255,255,255,0.2) !important;
-}}
-[data-testid="stSidebar"] [data-testid="stAlert"] {{
-    padding: 4px 8px !important;
-    font-size: 0.74rem !important;
-    margin: 2px 0 !important;
-    line-height: 1.2 !important;
-}}
+
+/* Each heading gets clear space above and below so it
+   does NOT merge with the widget that follows it        */
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {{
-    font-size: 0.85rem !important;
+    font-size: 0.88rem !important;
     font-weight: 700 !important;
-    margin: 4px 0 2px !important;
+    margin-top: 10px !important;
+    margin-bottom: 4px !important;
     padding: 0 !important;
+    display: block !important;
+    color: white !important;
 }}
+
+/* Labels on inputs sit close to their input box */
 [data-testid="stSidebar"] label {{
     font-size: 0.8rem !important;
-    margin-bottom: 1px !important;
+    margin-bottom: 2px !important;
     line-height: 1.3 !important;
 }}
-[data-testid="stSidebar"] input {{
-    height: 30px !important;
-    font-size: 0.8rem !important;
+
+/* Reduce the large default gap Streamlit puts
+   between the slider thumb area and next element */
+[data-testid="stSidebar"] .stSlider {{
+    margin-bottom: 4px !important;
+    padding-bottom: 4px !important;
 }}
+
+/* Divider lines */
+[data-testid="stSidebar"] hr {{
+    margin-top: 8px !important;
+    margin-bottom: 8px !important;
+    border-color: rgba(255,255,255,0.25) !important;
+}}
+
+/* Alert/success box */
+[data-testid="stSidebar"] [data-testid="stAlert"] {{
+    padding: 5px 10px !important;
+    font-size: 0.76rem !important;
+    margin: 4px 0 !important;
+    line-height: 1.2 !important;
+}}
+
+/* Input boxes */
+[data-testid="stSidebar"] input {{
+    font-size: 0.8rem !important;
+    height: 30px !important;
+}}
+
+/* Buttons */
 [data-testid="stSidebar"] .stButton button {{
-    padding: 6px 12px !important;
+    padding: 7px 12px !important;
     font-size: 0.82rem !important;
-    margin-top: 3px !important;
+    margin-top: 4px !important;
 }}
 
 /* ── Mobile responsive ───────────────────────── */

@@ -144,64 +144,57 @@ div[data-testid="stButton"] > button:hover {{ opacity: 0.88; }}
 /* ── Dataframe ───────────────────────────────── */
 [data-testid="stDataFrame"] {{ font-size: 0.78rem !important; }}
 
-/* ── Mobile responsive ───────────────────────── */
 
-
-/* ── SIDEBAR — balanced spacing, no overlapping ─────── */
-section[data-testid="stSidebar"] > div:first-child {
+/* ── SIDEBAR balanced spacing ── */
+section[data-testid="stSidebar"] > div:first-child {{
     padding-top: 0.3rem !important;
-}
-[data-testid="stSidebar"] .block-container {
+}}
+[data-testid="stSidebar"] .block-container {{
     padding-top: 0.2rem !important;
     padding-bottom: 0.5rem !important;
-}
-/* Reduce gap between each widget — not zero, just smaller */
-[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {
+}}
+[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {{
     gap: 0.25rem !important;
-}
-/* Slider — reduce bottom padding only */
-[data-testid="stSidebar"] .stSlider {
+}}
+[data-testid="stSidebar"] .stSlider {{
     padding-bottom: 0.2rem !important;
     margin-bottom: 0 !important;
-}
-/* Dividers */
-[data-testid="stSidebar"] hr {
+}}
+[data-testid="stSidebar"] hr {{
     margin-top: 6px !important;
     margin-bottom: 6px !important;
     border-color: rgba(255,255,255,0.2) !important;
-}
-/* Alert boxes — reduce height */
-[data-testid="stSidebar"] [data-testid="stAlert"] {
+}}
+[data-testid="stSidebar"] [data-testid="stAlert"] {{
     padding: 5px 10px !important;
     font-size: 0.76rem !important;
     margin: 3px 0 !important;
     line-height: 1.3 !important;
-}
-/* Headings */
+}}
 [data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3 {
+[data-testid="stSidebar"] h3 {{
     font-size: 0.85rem !important;
     font-weight: 700 !important;
     margin: 4px 0 2px !important;
     padding: 0 !important;
-}
-/* Labels */
-[data-testid="stSidebar"] label {
+}}
+[data-testid="stSidebar"] label {{
     font-size: 0.8rem !important;
     margin-bottom: 1px !important;
     line-height: 1.3 !important;
-}
-/* Input height */
-[data-testid="stSidebar"] input {
+}}
+[data-testid="stSidebar"] input {{
     height: 30px !important;
     font-size: 0.8rem !important;
-}
-/* Buttons */
-[data-testid="stSidebar"] .stButton button {
+}}
+[data-testid="stSidebar"] .stButton button {{
     padding: 6px 12px !important;
     font-size: 0.82rem !important;
     margin-top: 3px !important;
-}
+}}
+
+/* ── Mobile responsive ───────────────────────── */
+
 
 @media (max-width: 768px) {{
     .block-container {{ padding: 0.5rem 0.6rem !important; }}

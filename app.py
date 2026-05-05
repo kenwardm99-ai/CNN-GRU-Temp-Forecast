@@ -154,10 +154,10 @@ section[data-testid="stSidebar"] > div:first-child {{
     padding-bottom: 0.5rem !important;
 }}
 [data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {{
-    gap: 0.25rem !important;
+    gap: 0.15rem !important;
 }}
 [data-testid="stSidebar"] .stSlider {{
-    padding-bottom: 0.2rem !important;
+    padding-bottom: 0 !important;
     margin-bottom: 0 !important;
 }}
 [data-testid="stSidebar"] hr {{
@@ -166,10 +166,10 @@ section[data-testid="stSidebar"] > div:first-child {{
     border-color: rgba(255,255,255,0.2) !important;
 }}
 [data-testid="stSidebar"] [data-testid="stAlert"] {{
-    padding: 5px 10px !important;
-    font-size: 0.76rem !important;
-    margin: 3px 0 !important;
-    line-height: 1.3 !important;
+    padding: 4px 8px !important;
+    font-size: 0.74rem !important;
+    margin: 2px 0 !important;
+    line-height: 1.2 !important;
 }}
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {{

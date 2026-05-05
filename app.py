@@ -347,7 +347,7 @@ def main():
     st.markdown("""
 <div class='banner'>
   <h2> CNN-GRU Temperature Forecasting</h2>
-  <p>University of Zimbabwe &nbsp;·&nbsp; Department of Computer Engineering
+  <p>University of Zimbabwe &nbsp;·&nbsp; Department of Analytics and Informatics
      &nbsp;·&nbsp; Horizons: +1h · +3h · +6h
      &nbsp;·&nbsp; Powered by Open-Meteo</p>
 </div>""", unsafe_allow_html=True)
@@ -659,7 +659,7 @@ def main():
         f"<div style='text-align:center;color:#888;font-size:0.72rem;'>"
         f"CNN-GRU Temperature Forecasting &nbsp;·&nbsp; "
         f"University of Zimbabwe &nbsp;·&nbsp; "
-        f"Department of Computer Engineering &nbsp;·&nbsp; 2024 &nbsp;·&nbsp; "
+        f"Department of Analytics and Informatics &nbsp;·&nbsp; 2024 &nbsp;·&nbsp; "
         f"Weather data: "
         f"<a href='https://open-meteo.com' style='color:{C_BLUE};'>Open-Meteo</a>"
         f"</div>", unsafe_allow_html=True)

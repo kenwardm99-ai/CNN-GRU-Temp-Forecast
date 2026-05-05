@@ -145,6 +145,78 @@ div[data-testid="stButton"] > button:hover {{ opacity: 0.88; }}
 [data-testid="stDataFrame"] {{ font-size: 0.78rem !important; }}
 
 /* ── Mobile responsive ───────────────────────── */
+
+/* ── SIDEBAR GAPS — target all 3 arrow locations ─────── */
+/* Arrow 1: push to very top */
+section[data-testid="stSidebar"] > div:first-child {{
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}}
+[data-testid="stSidebar"] .block-container {{
+    padding-top: 0.15rem !important;
+    padding-bottom: 0 !important;
+}}
+/* Kill ALL vertical spacing between sidebar widgets */
+[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {{
+    gap: 0rem !important;
+}}
+[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] > div {{
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}}
+[data-testid="stSidebar"] .element-container {{
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+}}
+/* Arrow 2: below slider */
+[data-testid="stSidebar"] .stSlider {{
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+}}
+/* Divider lines */
+[data-testid="stSidebar"] hr {{
+    margin-top: 5px !important;
+    margin-bottom: 5px !important;
+    border-color: rgba(255,255,255,0.2) !important;
+}}
+/* Arrow 3: below success alert */
+[data-testid="stSidebar"] [data-testid="stAlert"] {{
+    padding: 3px 8px !important;
+    font-size: 0.74rem !important;
+    margin: 2px 0 !important;
+    line-height: 1.2 !important;
+}}
+/* Section headings */
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {{
+    font-size: 0.85rem !important;
+    font-weight: 700 !important;
+    margin: 3px 0 1px !important;
+    padding: 0 !important;
+}}
+/* Labels */
+[data-testid="stSidebar"] label {{
+    font-size: 0.78rem !important;
+    margin-bottom: 0 !important;
+    line-height: 1.2 !important;
+}}
+/* Input height */
+[data-testid="stSidebar"] input {{
+    height: 28px !important;
+    font-size: 0.8rem !important;
+    padding: 2px 7px !important;
+}}
+[data-testid="stSidebar"] [data-baseweb="input"] {{
+    height: 28px !important;
+}}
+/* Buttons */
+[data-testid="stSidebar"] button {{
+    padding: 5px 10px !important;
+    font-size: 0.82rem !important;
+    margin: 2px 0 !important;
+}}
+
 @media (max-width: 768px) {{
     .block-container {{ padding: 0.5rem 0.6rem !important; }}
     .banner h2 {{ font-size: 1.05rem !important; }}

@@ -1,15 +1,563 @@
-ensures the model sees real recent temperatures
-            # not old 2023 training data from Weather.csv
+"""
+CNN-GRU Temperature Forecasting — Professional Portable App
+Files: cnn_gru_model.onnx, scaler_X.pkl, scaler_y.pkl,
+       model_config.json, Weather.csv
+Run:  streamlit run app.py
+"""
+import json, pickle, datetime, warnings, requests
+warnings.filterwarnings("ignore")
+import numpy as np
+import pandas as pd
+import streamlit as st
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+st.set_page_config(
+    page_title="CNN-GRU Temperature Forecast",
+    page_icon="",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+C_NAVY  = "#1F4E79"
+C_BLUE  = "#2E75B6"
+C_GREEN = "#70AD47"
+C_ORANGE= "#ED7D31"
+
+st.markdown(f"""<style>
+/* ── Global ─────────────────────────────────── */
+html, body, [class*="css"] {{ font-size: 14px; }}
+.block-container {{
+    padding: 1rem 1.5rem 1rem 1.5rem !important;
+    max-width: 1200px !important;
+}}
+
+/* ── Sidebar ─────────────────────────────────── */
+[data-testid="stSidebar"] {{
+    background: {C_NAVY};
+    min-width: 260px !important;
+    max-width: 260px !important;
+}}
+[data-testid="stSidebar"] * {{ color: white !important; }}
+[data-testid="stSidebar"] .stSelectbox label,
+[data-testid="stSidebar"] .stSlider label,
+[data-testid="stSidebar"] .stNumberInput label {{
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+}}
+[data-testid="stSidebar"] input {{
+    font-size: 0.82rem !important;
+    padding: 4px 8px !important;
+}}
+
+/* ── Header banner ───────────────────────────── */
+.banner {{
+    background: linear-gradient(135deg, {C_NAVY}, {C_BLUE});
+    padding: 14px 20px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+}}
+.banner h2 {{
+    color: white; margin: 0;
+    font-size: 1.35rem; font-weight: 700;
+}}
+.banner p {{
+    color: #D6E4F0; margin: 3px 0 0;
+    font-size: 0.78rem;
+}}
+
+/* ── Section header ──────────────────────────── */
+.sec {{
+    background: linear-gradient(90deg, {C_NAVY}, {C_BLUE});
+    color: white; padding: 5px 12px;
+    border-radius: 6px; font-size: 0.82rem;
+    font-weight: 700; margin: 10px 0 6px;
+}}
+
+/* ── Forecast cards ──────────────────────────── */
+.fc {{
+    background: #f0f6ff;
+    border: 2px solid {C_BLUE};
+    border-radius: 10px;
+    padding: 12px 8px;
+    text-align: center;
+}}
+.fc-temp  {{ font-size: 1.5rem; font-weight: 700; color: {C_NAVY}; }}
+.fc-label {{ font-size: 0.75rem; color: #444; margin-top: 2px; }}
+.fc-delta {{ font-size: 0.78rem; font-weight: 700; margin-top: 4px; }}
+
+/* ── Metric cards (performance tab) ─────────── */
+.mc {{
+    background: #f0f6ff;
+    border: 2px solid {C_BLUE};
+    border-radius: 10px;
+    padding: 10px 6px;
+    text-align: center;
+}}
+.mc-h {{ font-size: 0.82rem; font-weight: 700; color: {C_NAVY}; }}
+.mc-v {{ font-size: 1.2rem; font-weight: 700; color: {C_NAVY}; margin: 3px 0; }}
+.mc-s {{ font-size: 0.7rem; color: #555; }}
+
+/* ── Status badge ────────────────────────────── */
+.ok {{
+    background: #eafaf1; border: 1.5px solid {C_GREEN};
+    border-radius: 7px; padding: 5px 10px;
+    color: #1e7e34; font-size: 0.8rem;
+    font-weight: 600; margin: 4px 0 8px;
+}}
+
+/* ── Fetched weather rows ────────────────────── */
+.fw {{
+    display: flex; justify-content: space-between;
+    align-items: center; padding: 3px 0;
+    border-bottom: 1px solid #e8eef5;
+    font-size: 0.78rem;
+}}
+.fw-k {{ color: #666; }}
+.fw-v {{ font-weight: 600; color: {C_NAVY}; }}
+
+/* ── Predict button ──────────────────────────── */
+div[data-testid="stButton"] > button {{
+    background: linear-gradient(135deg, {C_NAVY}, {C_BLUE});
+    color: white !important; border: none;
+    border-radius: 8px; padding: 9px 18px;
+    font-size: 0.9rem; font-weight: 700;
+    width: 100%; margin-top: 6px;
+    transition: opacity 0.2s;
+}}
+div[data-testid="stButton"] > button:hover {{ opacity: 0.88; }}
+
+/* ── Tabs ────────────────────────────────────── */
+[data-testid="stTabs"] button {{
+    font-size: 0.82rem !important;
+    padding: 6px 14px !important;
+    font-weight: 600 !important;
+}}
+
+/* ── Metric widget ───────────────────────────── */
+[data-testid="stMetricLabel"] {{ font-size: 0.72rem !important; }}
+[data-testid="stMetricValue"] {{ font-size: 1rem !important; }}
+
+/* ── Alert boxes ─────────────────────────────── */
+[data-testid="stAlert"] {{ font-size: 0.8rem !important; padding: 8px 12px !important; }}
+
+/* ── Dataframe ───────────────────────────────── */
+[data-testid="stDataFrame"] {{ font-size: 0.78rem !important; }}
+
+
+
+
+/* ── SIDEBAR SPACING ─────────────────────────────────────── */
+/* Reduce top padding so content starts higher */
+section[data-testid="stSidebar"] > div:first-child {{
+    padding-top: 0.5rem !important;
+}}
+
+/* Each heading gets clear space above and below so it
+   does NOT merge with the widget that follows it        */
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {{
+    font-size: 0.88rem !important;
+    font-weight: 700 !important;
+    margin-top: 10px !important;
+    margin-bottom: 4px !important;
+    padding: 0 !important;
+    display: block !important;
+    color: white !important;
+}}
+
+/* Labels on inputs sit close to their input box */
+[data-testid="stSidebar"] label {{
+    font-size: 0.8rem !important;
+    margin-bottom: 2px !important;
+    line-height: 1.3 !important;
+}}
+
+/* Reduce the large default gap Streamlit puts
+   between the slider thumb area and next element */
+[data-testid="stSidebar"] .stSlider {{
+    margin-bottom: 4px !important;
+    padding-bottom: 4px !important;
+}}
+
+/* Divider lines */
+[data-testid="stSidebar"] hr {{
+    margin-top: 8px !important;
+    margin-bottom: 8px !important;
+    border-color: rgba(255,255,255,0.25) !important;
+}}
+
+/* Alert/success box */
+[data-testid="stSidebar"] [data-testid="stAlert"] {{
+    padding: 5px 10px !important;
+    font-size: 0.76rem !important;
+    margin: 4px 0 !important;
+    line-height: 1.2 !important;
+}}
+
+/* Input boxes */
+[data-testid="stSidebar"] input {{
+    font-size: 0.8rem !important;
+    height: 30px !important;
+}}
+
+/* Buttons */
+[data-testid="stSidebar"] .stButton button {{
+    padding: 7px 12px !important;
+    font-size: 0.82rem !important;
+    margin-top: 4px !important;
+}}
+
+/* ── Mobile responsive ───────────────────────── */
+
+
+@media (max-width: 768px) {{
+    .block-container {{ padding: 0.5rem 0.6rem !important; }}
+    .banner h2 {{ font-size: 1.05rem !important; }}
+    .banner p  {{ font-size: 0.7rem !important; }}
+    .fc-temp   {{ font-size: 1.2rem !important; }}
+    [data-testid="stSidebar"] {{
+        min-width: 100% !important;
+        max-width: 100% !important;
+    }}
+}}
+</style>""", unsafe_allow_html=True)
+
+
+# ════════════════════════════════════════════════════════════
+# OPEN-METEO FETCHER
+# ════════════════════════════════════════════════════════════
+def fetch_weather(date, hour, lat=-17.8252, lon=31.0335):
+    """Fetch single hour of weather for sidebar display."""
+    try:
+        r = requests.get(
+            "https://archive-api.open-meteo.com/v1/archive",
+            params={
+                "latitude": lat, "longitude": lon,
+                "start_date": date.strftime("%Y-%m-%d"),
+                "end_date":   date.strftime("%Y-%m-%d"),
+                "hourly": ("temperature_2m,relativehumidity_2m,dewpoint_2m,"
+                           "windspeed_10m,surface_pressure,shortwave_radiation,"
+                           "precipitation,cloudcover"),
+                "timezone": "Africa/Harare"
+            }, timeout=10)
+        r.raise_for_status()
+        h = r.json()["hourly"]
+        return {
+            "Temperature_C":       round(h["temperature_2m"][hour], 2),
+            "Humidity_pct":        round(h["relativehumidity_2m"][hour], 1),
+            "Dew_Point_C":         round(h["dewpoint_2m"][hour], 2),
+            "Wind_Speed_ms":       round(h["windspeed_10m"][hour] / 3.6, 2),
+            "Pressure_hPa":        round(h["surface_pressure"][hour], 2),
+            "Solar_Radiation_Wm2": round(h["shortwave_radiation"][hour], 1),
+            "Precipitation_mm":    round(h["precipitation"][hour], 1),
+            "Cloud_Cover_pct":     int(h["cloudcover"][hour]),
+        }, None
+    except requests.exceptions.ConnectionError:
+        return None, "No internet connection."
+    except requests.exceptions.Timeout:
+        return None, "Request timed out."
+    except Exception as e:
+        return None, f"Error: {e}"
+
+
+def fetch_sequence_from_meteo(date, hour, lat=-17.8252, lon=31.0335, lookback=168):
+    """
+    Fetch the full 168-hour sequence of REAL weather from Open-Meteo.
+    This replaces old Weather.csv data so the model sees actual
+    recent temperatures instead of old 2023 training data.
+    """
+    try:
+        end_dt   = pd.Timestamp(date) + pd.Timedelta(hours=hour)
+        start_dt = end_dt - pd.Timedelta(hours=lookback - 1)
+        r = requests.get(
+            "https://archive-api.open-meteo.com/v1/archive",
+            params={
+                "latitude":   lat,
+                "longitude":  lon,
+                "start_date": start_dt.strftime("%Y-%m-%d"),
+                "end_date":   end_dt.strftime("%Y-%m-%d"),
+                "hourly": ("temperature_2m,relativehumidity_2m,dewpoint_2m,"
+                           "windspeed_10m,surface_pressure,shortwave_radiation,"
+                           "precipitation,cloudcover"),
+                "timezone": "Africa/Harare"
+            }, timeout=20)
+        r.raise_for_status()
+        h = r.json()["hourly"]
+        timestamps = pd.to_datetime(h["time"])
+        df = pd.DataFrame({
+            "Timestamp":           timestamps,
+            "Year":                timestamps.year,
+            "Month":               timestamps.month,
+            "Day":                 timestamps.day,
+            "Hour":                timestamps.hour,
+            "Day_of_Week":         timestamps.dayofweek,
+            "Temperature_C":       h["temperature_2m"],
+            "Humidity_pct":        h["relativehumidity_2m"],
+            "Wind_Speed_ms":       [v / 3.6 for v in h["windspeed_10m"]],
+            "Pressure_hPa":        h["surface_pressure"],
+            "Solar_Radiation_Wm2": h["shortwave_radiation"],
+            "Dew_Point_C":         h["dewpoint_2m"],
+            "Precipitation_mm":    h["precipitation"],
+            "Cloud_Cover_pct":     h["cloudcover"],
+        })
+        mask = timestamps <= end_dt
+        df   = df[mask].tail(lookback).reset_index(drop=True)
+        return df, None
+    except requests.exceptions.ConnectionError:
+        return None, "No internet connection."
+    except requests.exceptions.Timeout:
+        return None, "Sequence fetch timed out."
+    except Exception as e:
+        return None, f"Sequence error: {e}"
+
+
+# ════════════════════════════════════════════════════════════
+# LOADERS
+# ════════════════════════════════════════════════════════════
+@st.cache_resource(show_spinner="Loading CNN-GRU model...")
+def load_model():
+    import onnxruntime as ort
+    return ort.InferenceSession("cnn_gru_model.onnx",
+                                providers=["CPUExecutionProvider"])
+
+@st.cache_resource(show_spinner=False)
+def load_scalers():
+    with open("scaler_X.pkl","rb") as f: sx=pickle.load(f)
+    with open("scaler_y.pkl","rb") as f: sy=pickle.load(f)
+    return sx, sy
+
+@st.cache_resource(show_spinner=False)
+def load_config():
+    with open("model_config.json") as f: return json.load(f)
+
+@st.cache_data(show_spinner=False)
+def load_history():
+    df=pd.read_csv("Weather.csv",parse_dates=["Timestamp"])
+    df.sort_values("Timestamp",inplace=True)
+    df.reset_index(drop=True,inplace=True)
+    return df
+
+
+# ════════════════════════════════════════════════════════════
+# FEATURES & INFERENCE
+# ════════════════════════════════════════════════════════════
+FEATS = ["Temperature_C","Humidity_pct","Wind_Speed_ms","Pressure_hPa",
+         "Solar_Radiation_Wm2","Dew_Point_C","Precipitation_mm","Cloud_Cover_pct",
+         "hour_sin","hour_cos","month_sin","month_cos","dow_sin","dow_cos"]
+
+def make_row(ts,temp,hum,wind,pres,solar,dew,rain,cloud):
+    return {"Temperature_C":temp,"Humidity_pct":hum,"Wind_Speed_ms":wind,
+            "Pressure_hPa":pres,"Solar_Radiation_Wm2":solar,"Dew_Point_C":dew,
+            "Precipitation_mm":rain,"Cloud_Cover_pct":cloud,
+            "hour_sin": np.sin(2*np.pi*ts.hour/24),
+            "hour_cos": np.cos(2*np.pi*ts.hour/24),
+            "month_sin":np.sin(2*np.pi*ts.month/12),
+            "month_cos":np.cos(2*np.pi*ts.month/12),
+            "dow_sin":  np.sin(2*np.pi*ts.weekday()/7),
+            "dow_cos":  np.cos(2*np.pi*ts.weekday()/7)}
+
+def build_seq(df_hist,row,sx,lookback=168):
+    h=df_hist.tail(lookback-1).copy()
+    for col,src,n in [("hour_sin","Hour",24),("hour_cos","Hour",24),
+                      ("month_sin","Month",12),("month_cos","Month",12),
+                      ("dow_sin","Day_of_Week",7),("dow_cos","Day_of_Week",7)]:
+        fn=np.sin if "sin" in col else np.cos
+        h[col]=fn(2*np.pi*h[src]/n)
+    rows=h[FEATS].values.tolist()+[[row[f] for f in FEATS]]
+    arr=np.array(rows,dtype=np.float32)
+    return sx.transform(arr)[np.newaxis,...].astype(np.float32)
+
+def run_predict(seq,sess,sy):
+    inp=sess.get_inputs()[0].name
+    out=sess.get_outputs()[0].name
+    p=sess.run([out],{inp:seq})[0]
+    r=sy.inverse_transform(p)
+    return float(r[0,0]),float(r[0,1]),float(r[0,2])
+
+
+# ════════════════════════════════════════════════════════════
+# CHARTS  — fixed sizes, professional style
+# ════════════════════════════════════════════════════════════
+plt.rcParams.update({
+    "font.family":      "DejaVu Sans",
+    "axes.spines.top":  False,
+    "axes.spines.right":False,
+    "figure.facecolor": "white",
+    "figure.dpi":       110,
+})
+
+def plot_history(df):
+    recent = df.tail(7*24)
+    fig, ax = plt.subplots(figsize=(9, 2.8))
+    ax.plot(recent["Timestamp"], recent["Temperature_C"],
+            lw=1.2, color=C_NAVY, alpha=0.9)
+    ax.fill_between(recent["Timestamp"], recent["Temperature_C"],
+                    alpha=0.12, color=C_BLUE)
+    ax.set_title("Recent 7-Day Temperature History",
+                 fontsize=10, fontweight="bold", pad=5)
+    ax.set_ylabel("°C", fontsize=9)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    ax.tick_params(labelsize=8)
+    plt.xticks(rotation=20)
+    fig.tight_layout(pad=0.6)
+    return fig
+
+def plot_forecast_bar(t1h,t3h,t6h,t0):
+    fig, ax = plt.subplots(figsize=(6, 2.8))
+    vals  = [t0, t1h, t3h, t6h]
+    lbls  = ["Input", "+1 Hour", "+3 Hours", "+6 Hours"]
+    colors= [C_BLUE, C_GREEN, C_ORANGE, C_NAVY]
+    bars  = ax.bar(lbls, vals, color=colors, width=0.5,
+                   edgecolor="white", zorder=3)
+    ax.set_ylim(min(vals)-3, max(vals)+5)
+    ax.set_title("Forecast Summary", fontsize=10, fontweight="bold", pad=5)
+    ax.set_ylabel("°C", fontsize=9)
+    for b, v in zip(bars, vals):
+        ax.text(b.get_x()+b.get_width()/2, b.get_height()+0.2,
+                f"{v:.1f}°C", ha="center", va="bottom",
+                fontsize=8.5, fontweight="bold")
+    ax.axhline(t0, color="grey", ls="--", lw=1, alpha=0.5)
+    ax.tick_params(labelsize=8)
+    ax.grid(axis="y", alpha=0.25, zorder=0)
+    fig.tight_layout(pad=0.6)
+    return fig
+
+def plot_monthly(df):
+    mnames=["Jan","Feb","Mar","Apr","May","Jun",
+            "Jul","Aug","Sep","Oct","Nov","Dec"]
+    data=[df[df["Month"]==m]["Temperature_C"].values for m in range(1,13)]
+    fig, ax = plt.subplots(figsize=(7, 3))
+    bp=ax.boxplot(data, patch_artist=True,
+                  medianprops=dict(color="white",lw=2))
+    for p in bp["boxes"]: p.set_facecolor(C_NAVY); p.set_alpha(0.8)
+    ax.set_xticklabels(mnames, fontsize=8)
+    ax.set_title("Monthly Temperature Distribution",
+                 fontsize=10, fontweight="bold", pad=5)
+    ax.set_ylabel("°C", fontsize=9)
+    ax.tick_params(labelsize=8)
+    fig.tight_layout(pad=0.6)
+    return fig
+
+def plot_diurnal(df):
+    hg=df.groupby("Hour")["Temperature_C"].agg(["mean","std"])
+    fig, ax = plt.subplots(figsize=(7, 3))
+    ax.fill_between(hg.index, hg["mean"]-hg["std"],
+                    hg["mean"]+hg["std"], alpha=0.15, color=C_BLUE)
+    ax.plot(hg.index, hg["mean"], color=C_NAVY, lw=2,
+            marker="o", ms=3)
+    ax.set_title("Diurnal Pattern (Mean ± 1σ)",
+                 fontsize=10, fontweight="bold", pad=5)
+    ax.set_xlabel("Hour of Day", fontsize=9)
+    ax.set_ylabel("°C", fontsize=9)
+    ax.set_xticks(range(0,24,3))
+    ax.tick_params(labelsize=8)
+    fig.tight_layout(pad=0.6)
+    return fig
+
+
+# ════════════════════════════════════════════════════════════
+# MAIN
+# ════════════════════════════════════════════════════════════
+def main():
+
+    # ── Banner ───────────────────────────────────────────────
+    st.markdown("""
+<div class='banner'>
+  <h2> CNN-GRU Temperature Forecasting</h2>
+  <p>University of Zimbabwe &nbsp;·&nbsp; Department of Analytics and Informatics
+     &nbsp;·&nbsp; Horizons: +1h · +3h · +6h
+     &nbsp;·&nbsp; Powered by Open-Meteo</p>
+</div>""", unsafe_allow_html=True)
+
+    # ── Load artefacts ───────────────────────────────────────
+    ok = True
+    try:
+        sess       = load_model()
+        sx, sy     = load_scalers()
+        cfg        = load_config()
+        df         = load_history()
+        LB         = cfg.get("lookback", 168)
+    except FileNotFoundError as e:
+        st.warning(f" Demo Mode — `{e}`")
+        ok = False; LB = 168
+        try:    df = load_history()
+        except: df = None
+
+    # ── Session state ─────────────────────────────────────────
+    for k,v in [("fetched",False),("fd",{}),("status",""),
+                ("t1h",None),("t3h",None),("t6h",None),("t0",None)]:
+        if k not in st.session_state: st.session_state[k] = v
+
+    # ── Sidebar ───────────────────────────────────────────────
+    with st.sidebar:
+        st.markdown("##  Date & Time")
+        date = st.date_input(
+            "Observation Date",
+            value=datetime.date.today()-datetime.timedelta(days=1),
+            max_value=datetime.date.today()-datetime.timedelta(days=1))
+        hour = st.slider("Observation Hour", 0, 23, 15)
+
+        st.markdown("---")
+        st.markdown("###  Auto-Fetch Weather")
+        
+
+        loc = st.selectbox("Location", [
+            "Harare, Zimbabwe","Bulawayo, Zimbabwe","Custom coordinates"])
+        coords = {"Harare, Zimbabwe":(-17.8252,31.0335),
+                  "Bulawayo, Zimbabwe":(-20.1325,28.6264)}
+        if loc == "Custom coordinates":
+            lat = st.number_input("Latitude", -90.0,90.0,-17.8252,0.0001)
+            lon = st.number_input("Longitude",-180.0,180.0,31.0335,0.0001)
+        else:
+            lat, lon = coords[loc]
+
+        if st.button(" Fetch Weather Automatically"):
+            with st.spinner(f"Fetching {date} {hour}:00..."):
+                data, err = fetch_weather(date, hour, lat, lon)
+            if data:
+                st.session_state.fd      = data
+                st.session_state.fetched = True
+                st.session_state.status  = "ok"
+            else:
+                st.session_state.fetched = False
+                st.session_state.status  = err
+
+        if st.session_state.status == "ok":
+            st.success(" Weather fetched — fields auto-filled")
+        elif st.session_state.status:
+            st.error(f" {st.session_state.status}")
+
+        st.markdown("---")
+        st.markdown("###  Weather Conditions")
+        
+
+        fd   = st.session_state.fd
+        temp = st.number_input("Temperature (°C)",  -30.0, 60.0,   float(fd.get("Temperature_C",22.5)), 0.1)
+        hum  = st.number_input("Humidity (%)",        0.0,100.0,   float(fd.get("Humidity_pct",65.0)), 0.5)
+        dew  = st.number_input("Dew Point (°C)",    -40.0, 50.0,   float(fd.get("Dew_Point_C",15.0)), 0.1)
+        wind = st.number_input("Wind Speed (m/s)",    0.0, 80.0,   float(fd.get("Wind_Speed_ms",3.5)), 0.1)
+        pres = st.number_input("Pressure (hPa)",    800.0,1100.0,  float(fd.get("Pressure_hPa",1013.0)), 0.5)
+        solar= st.number_input("Solar (W/m²)",        0.0,1500.0,  float(fd.get("Solar_Radiation_Wm2",350.0)), 5.0)
+        cloud= st.slider("Cloud Cover (%)", 0, 100,  int(fd.get("Cloud_Cover_pct",40)))
+        rain = st.number_input("Precipitation (mm)", 0.0, 500.0,   float(fd.get("Precipitation_mm",0.0)), 0.1)
+
+        st.markdown("---")
+        go = st.button(" Predict Temperature")
+
+    # ── Run inference ─────────────────────────────────────────
+    if go:
+        ts  = pd.Timestamp(datetime.datetime.combine(date, datetime.time(hour)))
+        row = make_row(ts,temp,hum,wind,pres,solar,dew,rain,cloud)
+        with st.spinner("Fetching real 7-day weather sequence..."):
             real_seq_df, seq_err = fetch_sequence_from_meteo(
                 date, hour, lat, lon, LB)
 
-        with st.spinner("Running CNN-GRU inference…"):
+        with st.spinner("Running CNN-GRU inference..."):
             if ok and real_seq_df is not None:
-                # Use real fetched sequence
                 seq = build_seq(real_seq_df, row, sx, LB)
                 t1h,t3h,t6h = run_predict(seq,sess,sy)
             elif ok and df is not None:
-                # Fallback to Weather.csv if fetch failed
                 if seq_err:
                     st.warning(f"Using historical data (real fetch failed: {seq_err})")
                 seq = build_seq(df,row,sx,LB)

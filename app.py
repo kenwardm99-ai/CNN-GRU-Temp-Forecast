@@ -597,7 +597,18 @@ def main():
         row = make_row(ts,temp,hum,wind,pres,solar,dew,rain,cloud)
         with st.spinner("Running CNN-GRU model..."):
             if ok and df is not None:
-                seq = build_seq(df, row, sx, LB)
+                # Use same month+day filtered data as the history chart
+                # so model sequence matches what the chart shows
+                today      = datetime.date.today()
+                cur_month  = today.month
+                cur_day    = today.day
+                df_month   = df[(df["Month"] == cur_month) &
+                                (df["Day"] <= cur_day)]
+                if len(df_month) >= LB:
+                    df_input = df_month
+                else:
+                    df_input = df  # fallback to full CSV
+                seq = build_seq(df_input, row, sx, LB)
                 t1h, t3h, t6h = run_predict(seq, sess, sy)
             else:
                 t1h=temp+0.4; t3h=temp+1.2; t6h=temp+2.5

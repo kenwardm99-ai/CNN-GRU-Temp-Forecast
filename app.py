@@ -414,15 +414,27 @@ plt.rcParams.update({
 })
 
 def plot_history(df):
-    # Show last 7 days from the same month as today in the CSV
-    current_month = datetime.date.today().month
-    same_month = df[df["Month"] == current_month]
+    # Show 7 days ending on today's day-of-month from the same month in CSV
+    today       = datetime.date.today()
+    cur_month   = today.month
+    cur_day     = today.day  # e.g. 10 if today is 10 May
+
+    # Filter to same month in CSV, then pick rows up to the same day-of-month
+    same_month = df[(df["Month"] == cur_month) & (df["Day"] <= cur_day)]
+
     if len(same_month) >= 7*24:
         recent = same_month.tail(7*24)
-        subtitle = f"(Month: {datetime.date.today().strftime('%B')} — from training dataset)"
+        label  = today.strftime("%d %B")
+        subtitle = f"(Up to {label} — from training dataset)"
+    elif len(same_month) > 0:
+        recent   = same_month
+        label    = today.strftime("%d %B")
+        subtitle = f"(Up to {label} — from training dataset)"
     else:
-        recent = df.tail(7*24)
+        # Fallback: just take last 7 days in CSV
+        recent   = df.tail(7*24)
         subtitle = "(Last 7 days — from training dataset)"
+
     fig, ax = plt.subplots(figsize=(9, 2.8))
     ax.plot(recent["Timestamp"], recent["Temperature_C"],
             lw=1.2, color=C_NAVY, alpha=0.9)

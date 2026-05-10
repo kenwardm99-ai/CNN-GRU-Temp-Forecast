@@ -513,8 +513,19 @@ def main():
     # ── Session state ─────────────────────────────────────────
     for k,v in [("fetched",False),("fd",{}),("status",""),
                 ("t1h",None),("t3h",None),("t6h",None),("t0",None),
-                ("real_hist",None)]:
+                ("real_hist",None),("hist_date",None)]:
         if k not in st.session_state: st.session_state[k] = v
+
+    # ── Auto-load real history on first run or when date changes ──
+    # Use yesterday as default date for the history chart
+    default_date = datetime.date.today() - datetime.timedelta(days=1)
+    if (st.session_state.real_hist is None or
+            st.session_state.hist_date != default_date):
+        with st.spinner("Loading real 7-day temperature history..."):
+            hist_df, _ = fetch_recent_history(default_date)
+        if hist_df is not None:
+            st.session_state.real_hist = hist_df
+            st.session_state.hist_date = default_date
 
     # ── Sidebar ───────────────────────────────────────────────
     with st.sidebar:
@@ -655,12 +666,12 @@ def main():
                 fig = plot_history(st.session_state.real_hist)
                 st.pyplot(fig, use_container_width=False)
                 plt.close(fig)
-                st.caption("Source: Open-Meteo real weather data")
+                st.caption(f"Real weather data from Open-Meteo")
             elif df is not None:
                 fig = plot_history(df)
                 st.pyplot(fig, use_container_width=False)
                 plt.close(fig)
-                st.caption("Source: Training dataset (fetch weather to see real data)")
+                st.caption("Showing training data — fetching real data...")
             else:
                 st.info("Fetch weather to see real 7-day history.")
 

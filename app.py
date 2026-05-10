@@ -312,6 +312,32 @@ def fetch_sequence_from_meteo(date, hour, lat=-17.8252, lon=31.0335, lookback=16
         return None, f"Sequence error: {e}"
 
 
+def fetch_recent_history(date, lat=-17.8252, lon=31.0335):
+    """Fetch last 7 days of real temperature data for the history chart."""
+    try:
+        end_dt   = pd.Timestamp(date)
+        start_dt = end_dt - pd.Timedelta(days=7)
+        r = requests.get(
+            "https://archive-api.open-meteo.com/v1/archive",
+            params={
+                "latitude":   lat,
+                "longitude":  lon,
+                "start_date": start_dt.strftime("%Y-%m-%d"),
+                "end_date":   end_dt.strftime("%Y-%m-%d"),
+                "hourly":     "temperature_2m",
+                "timezone":   "Africa/Harare"
+            }, timeout=15)
+        r.raise_for_status()
+        h = r.json()["hourly"]
+        df = pd.DataFrame({
+            "Timestamp":     pd.to_datetime(h["time"]),
+            "Temperature_C": h["temperature_2m"],
+        })
+        return df, None
+    except Exception as e:
+        return None, str(e)
+
+
 # ════════════════════════════════════════════════════════════
 # LOADERS
 # ════════════════════════════════════════════════════════════
@@ -486,7 +512,8 @@ def main():
 
     # ── Session state ─────────────────────────────────────────
     for k,v in [("fetched",False),("fd",{}),("status",""),
-                ("t1h",None),("t3h",None),("t6h",None),("t0",None)]:
+                ("t1h",None),("t3h",None),("t6h",None),("t0",None),
+                ("real_hist",None)]:
         if k not in st.session_state: st.session_state[k] = v
 
     # ── Sidebar ───────────────────────────────────────────────
@@ -621,15 +648,21 @@ def main():
                 st.markdown(rows, unsafe_allow_html=True)
 
         with right:
-            # History chart — fixed size, not full width
-            st.markdown("<div class='sec'> Recent 7-Day Temperature History</div>",
+            st.markdown("<div class='sec'>Recent 7-Day Temperature History</div>",
                         unsafe_allow_html=True)
-            if df is not None:
+            # Use real Open-Meteo history if fetched, else fall back to CSV
+            if st.session_state.real_hist is not None:
+                fig = plot_history(st.session_state.real_hist)
+                st.pyplot(fig, use_container_width=False)
+                plt.close(fig)
+                st.caption("Source: Open-Meteo real weather data")
+            elif df is not None:
                 fig = plot_history(df)
                 st.pyplot(fig, use_container_width=False)
                 plt.close(fig)
+                st.caption("Source: Training dataset (fetch weather to see real data)")
             else:
-                st.info("Weather.csv not loaded.")
+                st.info("Fetch weather to see real 7-day history.")
 
         # Forecast results
         if st.session_state.t1h is None:

@@ -414,14 +414,22 @@ plt.rcParams.update({
 })
 
 def plot_history(df):
-    recent = df.tail(7*24)
+    # Show last 7 days from the same month as today in the CSV
+    current_month = datetime.date.today().month
+    same_month = df[df["Month"] == current_month]
+    if len(same_month) >= 7*24:
+        recent = same_month.tail(7*24)
+        subtitle = f"(Month: {datetime.date.today().strftime('%B')} — from training dataset)"
+    else:
+        recent = df.tail(7*24)
+        subtitle = "(Last 7 days — from training dataset)"
     fig, ax = plt.subplots(figsize=(9, 2.8))
     ax.plot(recent["Timestamp"], recent["Temperature_C"],
             lw=1.2, color=C_NAVY, alpha=0.9)
     ax.fill_between(recent["Timestamp"], recent["Temperature_C"],
                     alpha=0.12, color=C_BLUE)
-    ax.set_title("Recent 7-Day Temperature History",
-                 fontsize=10, fontweight="bold", pad=5)
+    ax.set_title(f"7-Day Temperature History {subtitle}",
+                 fontsize=9, fontweight="bold", pad=5)
     ax.set_ylabel("°C", fontsize=9)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
     ax.tick_params(labelsize=8)
@@ -512,20 +520,8 @@ def main():
 
     # ── Session state ─────────────────────────────────────────
     for k,v in [("fetched",False),("fd",{}),("status",""),
-                ("t1h",None),("t3h",None),("t6h",None),("t0",None),
-                ("real_hist",None),("hist_date",None)]:
+                ("t1h",None),("t3h",None),("t6h",None),("t0",None)]:
         if k not in st.session_state: st.session_state[k] = v
-
-    # ── Auto-load real history on first run or when date changes ──
-    # Use yesterday as default date for the history chart
-    default_date = datetime.date.today() - datetime.timedelta(days=1)
-    if (st.session_state.real_hist is None or
-            st.session_state.hist_date != default_date):
-        with st.spinner("Loading real 7-day temperature history..."):
-            hist_df, _ = fetch_recent_history(default_date)
-        if hist_df is not None:
-            st.session_state.real_hist = hist_df
-            st.session_state.hist_date = default_date
 
     # ── Sidebar ───────────────────────────────────────────────
     with st.sidebar:
@@ -587,25 +583,12 @@ def main():
     if go:
         ts  = pd.Timestamp(datetime.datetime.combine(date, datetime.time(hour)))
         row = make_row(ts,temp,hum,wind,pres,solar,dew,rain,cloud)
-
-        with st.spinner("Fetching real 7-day sequence for model input..."):
-            real_seq_df, seq_err = fetch_sequence_from_meteo(
-                date, hour, lat, lon, LB)
-
-        with st.spinner("Running CNN-GRU model inference..."):
-            if ok and real_seq_df is not None and len(real_seq_df) >= LB:
-                # Feed the real 168-hour sequence directly into the model
-                # This is a genuine CNN-GRU prediction on real weather data
-                seq = build_seq(real_seq_df, row, sx, LB)
-                t1h, t3h, t6h = run_predict(seq, sess, sy)
-            elif ok and df is not None:
-                # Fallback: use CSV sequence if real fetch failed
-                st.warning(f"Using training data fallback ({seq_err})")
+        with st.spinner("Running CNN-GRU model..."):
+            if ok and df is not None:
                 seq = build_seq(df, row, sx, LB)
                 t1h, t3h, t6h = run_predict(seq, sess, sy)
             else:
                 t1h=temp+0.4; t3h=temp+1.2; t6h=temp+2.5
-
         st.session_state.t1h=t1h; st.session_state.t3h=t3h
         st.session_state.t6h=t6h; st.session_state.t0=temp
 
@@ -664,19 +647,12 @@ def main():
         with right:
             st.markdown("<div class='sec'>Recent 7-Day Temperature History</div>",
                         unsafe_allow_html=True)
-            # Use real Open-Meteo history if fetched, else fall back to CSV
-            if st.session_state.real_hist is not None:
-                fig = plot_history(st.session_state.real_hist)
-                st.pyplot(fig, use_container_width=False)
-                plt.close(fig)
-                st.caption(f"Real weather data from Open-Meteo")
-            elif df is not None:
+            if df is not None:
                 fig = plot_history(df)
                 st.pyplot(fig, use_container_width=False)
                 plt.close(fig)
-                st.caption("Showing training data — fetching real data...")
             else:
-                st.info("Fetch weather to see real 7-day history.")
+                st.info("Weather.csv not loaded.")
 
         # Forecast results
         if st.session_state.t1h is None:

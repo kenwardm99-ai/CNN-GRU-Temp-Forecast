@@ -587,22 +587,25 @@ def main():
     if go:
         ts  = pd.Timestamp(datetime.datetime.combine(date, datetime.time(hour)))
         row = make_row(ts,temp,hum,wind,pres,solar,dew,rain,cloud)
-        with st.spinner("Running CNN-GRU inference..."):
-            if ok and df is not None:
-                # Build sequence from Weather.csv history
-                # but override the last row with the user's real observation
+
+        with st.spinner("Fetching real 7-day sequence for model input..."):
+            real_seq_df, seq_err = fetch_sequence_from_meteo(
+                date, hour, lat, lon, LB)
+
+        with st.spinner("Running CNN-GRU model inference..."):
+            if ok and real_seq_df is not None and len(real_seq_df) >= LB:
+                # Feed the real 168-hour sequence directly into the model
+                # This is a genuine CNN-GRU prediction on real weather data
+                seq = build_seq(real_seq_df, row, sx, LB)
+                t1h, t3h, t6h = run_predict(seq, sess, sy)
+            elif ok and df is not None:
+                # Fallback: use CSV sequence if real fetch failed
+                st.warning(f"Using training data fallback ({seq_err})")
                 seq = build_seq(df, row, sx, LB)
-                t1h_sc, t3h_sc, t6h_sc = run_predict(seq, sess, sy)
-                # The model predicts relative to training distribution
-                # Adjust output by the difference between real temp and
-                # the last temperature in the historical sequence
-                last_train_temp = float(df["Temperature_C"].iloc[-1])
-                offset = temp - last_train_temp
-                t1h = t1h_sc + offset
-                t3h = t3h_sc + offset
-                t6h = t6h_sc + offset
+                t1h, t3h, t6h = run_predict(seq, sess, sy)
             else:
                 t1h=temp+0.4; t3h=temp+1.2; t6h=temp+2.5
+
         st.session_state.t1h=t1h; st.session_state.t3h=t3h
         st.session_state.t6h=t6h; st.session_state.t0=temp
 

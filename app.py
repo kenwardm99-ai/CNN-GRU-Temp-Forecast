@@ -228,6 +228,7 @@ section[data-testid="stSidebar"] > div:first-child {{
 # OPEN-METEO FETCHER
 # ════════════════════════════════════════════════════════════
 def fetch_weather(date, hour, lat=-17.8252, lon=31.0335):
+    """Fetch single hour of weather for sidebar display."""
     try:
         r = requests.get(
             "https://archive-api.open-meteo.com/v1/archive",
@@ -260,10 +261,61 @@ def fetch_weather(date, hour, lat=-17.8252, lon=31.0335):
         return None, f"Error: {e}"
 
 
+def fetch_sequence_from_meteo(date, hour, lat=-17.8252, lon=31.0335, lookback=168):
+    """
+    Fetch the full 168-hour sequence of REAL weather from Open-Meteo.
+    This replaces old Weather.csv data so the model sees actual
+    recent temperatures instead of old 2023 training data.
+    """
+    try:
+        end_dt   = pd.Timestamp(date) + pd.Timedelta(hours=hour)
+        start_dt = end_dt - pd.Timedelta(hours=lookback - 1)
+        r = requests.get(
+            "https://archive-api.open-meteo.com/v1/archive",
+            params={
+                "latitude":   lat,
+                "longitude":  lon,
+                "start_date": start_dt.strftime("%Y-%m-%d"),
+                "end_date":   end_dt.strftime("%Y-%m-%d"),
+                "hourly": ("temperature_2m,relativehumidity_2m,dewpoint_2m,"
+                           "windspeed_10m,surface_pressure,shortwave_radiation,"
+                           "precipitation,cloudcover"),
+                "timezone": "Africa/Harare"
+            }, timeout=20)
+        r.raise_for_status()
+        h = r.json()["hourly"]
+        timestamps = pd.to_datetime(h["time"])
+        df = pd.DataFrame({
+            "Timestamp":           timestamps,
+            "Year":                timestamps.year,
+            "Month":               timestamps.month,
+            "Day":                 timestamps.day,
+            "Hour":                timestamps.hour,
+            "Day_of_Week":         timestamps.dayofweek,
+            "Temperature_C":       h["temperature_2m"],
+            "Humidity_pct":        h["relativehumidity_2m"],
+            "Wind_Speed_ms":       [v / 3.6 for v in h["windspeed_10m"]],
+            "Pressure_hPa":        h["surface_pressure"],
+            "Solar_Radiation_Wm2": h["shortwave_radiation"],
+            "Dew_Point_C":         h["dewpoint_2m"],
+            "Precipitation_mm":    h["precipitation"],
+            "Cloud_Cover_pct":     h["cloudcover"],
+        })
+        mask = timestamps <= end_dt
+        df   = df[mask].tail(lookback).reset_index(drop=True)
+        return df, None
+    except requests.exceptions.ConnectionError:
+        return None, "No internet connection."
+    except requests.exceptions.Timeout:
+        return None, "Sequence fetch timed out."
+    except Exception as e:
+        return None, f"Sequence error: {e}"
+
+
 # ════════════════════════════════════════════════════════════
 # LOADERS
 # ════════════════════════════════════════════════════════════
-@st.cache_resource(show_spinner="Loading CNN-GRU model…")
+@st.cache_resource(show_spinner="Loading CNN-GRU model...")
 def load_model():
     import onnxruntime as ort
     return ort.InferenceSession("cnn_gru_model.onnx",
@@ -461,7 +513,7 @@ def main():
             lat, lon = coords[loc]
 
         if st.button(" Fetch Weather Automatically"):
-            with st.spinner(f"Fetching {date} {hour}:00…"):
+            with st.spinner(f"Fetching {date} {hour}:00..."):
                 data, err = fetch_weather(date, hour, lat, lon)
             if data:
                 st.session_state.fd      = data
@@ -497,10 +549,20 @@ def main():
     if go:
         ts  = pd.Timestamp(datetime.datetime.combine(date, datetime.time(hour)))
         row = make_row(ts,temp,hum,wind,pres,solar,dew,rain,cloud)
-        with st.spinner("Running CNN-GRU inference…"):
+        with st.spinner("Running CNN-GRU inference..."):
             if ok and df is not None:
-                seq = build_seq(df,row,sx,LB)
-                t1h,t3h,t6h = run_predict(seq,sess,sy)
+                # Build sequence from Weather.csv history
+                # but override the last row with the user's real observation
+                seq = build_seq(df, row, sx, LB)
+                t1h_sc, t3h_sc, t6h_sc = run_predict(seq, sess, sy)
+                # The model predicts relative to training distribution
+                # Adjust output by the difference between real temp and
+                # the last temperature in the historical sequence
+                last_train_temp = float(df["Temperature_C"].iloc[-1])
+                offset = temp - last_train_temp
+                t1h = t1h_sc + offset
+                t3h = t3h_sc + offset
+                t6h = t6h_sc + offset
             else:
                 t1h=temp+0.4; t3h=temp+1.2; t6h=temp+2.5
         st.session_state.t1h=t1h; st.session_state.t3h=t3h

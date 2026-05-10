@@ -1,5 +1,5 @@
 """
-CNN-GRU Temperature Forecasting — Professional Portable App
+CNN-GRU Temperature Forecasting — Portable App
 Files: cnn_gru_model.onnx, scaler_X.pkl, scaler_y.pkl,
        model_config.json, Weather.csv
 Run:  streamlit run app.py

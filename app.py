@@ -1,5 +1,5 @@
 """
-CNN-GRU Temperature Forecasting — Portable App
+CNN-GRU Temperature Forecasting — Professional Portable App
 Files: cnn_gru_model.onnx, scaler_X.pkl, scaler_y.pkl,
        model_config.json, Weather.csv
 Run:  streamlit run app.py
@@ -597,17 +597,28 @@ def main():
         row = make_row(ts,temp,hum,wind,pres,solar,dew,rain,cloud)
         with st.spinner("Running CNN-GRU model..."):
             if ok and df is not None:
-                # Use same month+day filtered data as the history chart
-                # so model sequence matches what the chart shows
-                today      = datetime.date.today()
-                cur_month  = today.month
-                cur_day    = today.day
-                df_month   = df[(df["Month"] == cur_month) &
-                                (df["Day"] <= cur_day)]
-                if len(df_month) >= LB:
-                    df_input = df_month
-                else:
-                    df_input = df  # fallback to full CSV
+                # Filter CSV to same month and day range as today
+                today     = datetime.date.today()
+                cur_month = today.month
+                cur_day   = today.day
+                df_month  = df[(df["Month"] == cur_month) &
+                               (df["Day"] <= cur_day)]
+                df_input  = df_month if len(df_month) >= LB else df
+
+                # KEY FIX: offset the Temperature_C column in the
+                # historical sequence so the last row aligns exactly
+                # with the user's real observed temperature.
+                # This preserves the diurnal shape and weather event
+                # patterns from the CSV while anchoring the absolute
+                # temperature level to real current conditions.
+                df_input = df_input.copy()
+                csv_last_temp = float(df_input["Temperature_C"].iloc[-1])
+                t_offset = temp - csv_last_temp
+                df_input["Temperature_C"] = df_input["Temperature_C"] + t_offset
+                # Also offset Dew_Point_C by the same amount to keep
+                # the physical relationship with temperature intact
+                df_input["Dew_Point_C"] = df_input["Dew_Point_C"] + t_offset
+
                 seq = build_seq(df_input, row, sx, LB)
                 t1h, t3h, t6h = run_predict(seq, sess, sy)
             else:

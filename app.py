@@ -383,16 +383,38 @@ def make_row(ts,temp,hum,wind,pres,solar,dew,rain,cloud):
             "dow_sin":  np.sin(2*np.pi*ts.weekday()/7),
             "dow_cos":  np.cos(2*np.pi*ts.weekday()/7)}
 
-def build_seq(df_hist,row,sx,lookback=168):
-    h=df_hist.tail(lookback-1).copy()
-    for col,src,n in [("hour_sin","Hour",24),("hour_cos","Hour",24),
-                      ("month_sin","Month",12),("month_cos","Month",12),
-                      ("dow_sin","Day_of_Week",7),("dow_cos","Day_of_Week",7)]:
-        fn=np.sin if "sin" in col else np.cos
-        h[col]=fn(2*np.pi*h[src]/n)
-    rows=h[FEATS].values.tolist()+[[row[f] for f in FEATS]]
-    arr=np.array(rows,dtype=np.float32)
-    return sx.transform(arr)[np.newaxis,...].astype(np.float32)
+def build_seq(df_hist, row, sx, lookback=168, sel_ts=None):
+    """Build a 168-step input sequence with CORRECT temporal features.
+    
+    The key fix: cyclic hour/month/dow features are recomputed from
+    proper consecutive timestamps ending at sel_ts, NOT from the
+    CSV Hour column. This ensures the model correctly sees the time
+    progression e.g. hour=15 heading toward evening (hour=16,17,18...)
+    rather than whatever hours happened to be in the CSV rows.
+    """
+    h = df_hist.tail(lookback - 1).copy().reset_index(drop=True)
+
+    # Generate the 168 correct consecutive timestamps ending at sel_ts
+    if sel_ts is None:
+        sel_ts = pd.Timestamp.now().replace(minute=0, second=0, microsecond=0)
+
+    # Timestamps for position 0..166 (the 167 history rows)
+    # Position 167 is sel_ts itself (the user row)
+    ts_list = [sel_ts - pd.Timedelta(hours=(lookback - 1 - i))
+               for i in range(lookback - 1)]
+
+    # Overwrite cyclic temporal features with CORRECT values
+    for i, ts in enumerate(ts_list):
+        h.loc[i, "hour_sin"]  = np.sin(2 * np.pi * ts.hour   / 24)
+        h.loc[i, "hour_cos"]  = np.cos(2 * np.pi * ts.hour   / 24)
+        h.loc[i, "month_sin"] = np.sin(2 * np.pi * ts.month  / 12)
+        h.loc[i, "month_cos"] = np.cos(2 * np.pi * ts.month  / 12)
+        h.loc[i, "dow_sin"]   = np.sin(2 * np.pi * ts.weekday() / 7)
+        h.loc[i, "dow_cos"]   = np.cos(2 * np.pi * ts.weekday() / 7)
+
+    rows = h[FEATS].values.tolist() + [[row[f] for f in FEATS]]
+    arr  = np.array(rows, dtype=np.float32)
+    return sx.transform(arr)[np.newaxis, ...].astype(np.float32)
 
 def run_predict(seq,sess,sy):
     inp=sess.get_inputs()[0].name
@@ -605,21 +627,21 @@ def main():
                                (df["Day"] <= cur_day)]
                 df_input  = df_month if len(df_month) >= LB else df
 
-                # KEY FIX: offset the Temperature_C column in the
-                # historical sequence so the last row aligns exactly
-                # with the user's real observed temperature.
-                # This preserves the diurnal shape and weather event
-                # patterns from the CSV while anchoring the absolute
-                # temperature level to real current conditions.
+                # Offset Temperature_C and Dew_Point_C so the sequence
+                # ends at the user's real observed temperature
                 df_input = df_input.copy()
                 csv_last_temp = float(df_input["Temperature_C"].iloc[-1])
                 t_offset = temp - csv_last_temp
                 df_input["Temperature_C"] = df_input["Temperature_C"] + t_offset
-                # Also offset Dew_Point_C by the same amount to keep
-                # the physical relationship with temperature intact
-                df_input["Dew_Point_C"] = df_input["Dew_Point_C"] + t_offset
+                df_input["Dew_Point_C"]   = df_input["Dew_Point_C"]   + t_offset
 
-                seq = build_seq(df_input, row, sx, LB)
+                # Pass sel_ts so build_seq generates CORRECT hour/month/dow
+                # cyclic features for every position in the sequence.
+                # This ensures the model knows hour=15 is heading toward
+                # evening (falling temp), not midnight heading to afternoon.
+                sel_ts = pd.Timestamp(
+                    datetime.datetime.combine(date, datetime.time(hour)))
+                seq = build_seq(df_input, row, sx, LB, sel_ts=sel_ts)
                 t1h, t3h, t6h = run_predict(seq, sess, sy)
             else:
                 t1h=temp+0.4; t3h=temp+1.2; t6h=temp+2.5

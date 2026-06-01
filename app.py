@@ -414,6 +414,8 @@ def build_seq(df_hist, row, sx, lookback=168, sel_ts=None):
 
     rows = h[FEATS].values.tolist() + [[row[f] for f in FEATS]]
     arr  = np.array(rows, dtype=np.float32)
+    # Clip to scaler's fitted range to prevent out-of-range scaling artifacts
+    arr  = np.clip(arr, sx.data_min_, sx.data_max_)
     return sx.transform(arr)[np.newaxis, ...].astype(np.float32)
 
 def run_predict(seq,sess,sy):
@@ -421,7 +423,11 @@ def run_predict(seq,sess,sy):
     out=sess.get_outputs()[0].name
     p=sess.run([out],{inp:seq})[0]
     r=sy.inverse_transform(p)
-    return float(r[0,0]),float(r[0,1]),float(r[0,2])
+    # Clamp to realistic Zimbabwe temperature range (5°C – 42°C)
+    t1 = float(np.clip(r[0,0], 5.0, 42.0))
+    t3 = float(np.clip(r[0,1], 5.0, 42.0))
+    t6 = float(np.clip(r[0,2], 5.0, 42.0))
+    return t1, t3, t6
 
 
 # ════════════════════════════════════════════════════════════

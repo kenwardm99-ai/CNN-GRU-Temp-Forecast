@@ -622,27 +622,39 @@ def main():
     if go:
         ts  = pd.Timestamp(datetime.datetime.combine(date, datetime.time(hour)))
         row = make_row(ts,temp,hum,wind,pres,solar,dew,rain,cloud)
-        with st.spinner("Running CNN-GRU model..."):
+        with st.spinner("Fetching real 7-day sequence & running CNN-GRU model..."):
             if ok:
-                # Use CSV sequence anchored to the real observed temperature.
-                # The scaler was fitted on CSV data so this keeps scaling correct
-                # and preserves the model's learned diurnal patterns (e.g. evening
-                # temperatures falling after 15:00).
+                # ── PRIMARY: fetch real 168-hour sequence from Open-Meteo ──
+                df_seq, seq_err = fetch_sequence_from_meteo(
+                    date, hour, lat, lon, LB)
+
+                if df_seq is not None and len(df_seq) >= LB:
+                    # Add cyclic time features to the real sequence
+                    df_seq["hour_sin"]  = np.sin(2*np.pi*df_seq["Hour"]/24)
+                    df_seq["hour_cos"]  = np.cos(2*np.pi*df_seq["Hour"]/24)
+                    df_seq["month_sin"] = np.sin(2*np.pi*df_seq["Month"]/12)
+                    df_seq["month_cos"] = np.cos(2*np.pi*df_seq["Month"]/12)
+                    df_seq["dow_sin"]   = np.sin(2*np.pi*df_seq["Day_of_Week"]/7)
+                    df_seq["dow_cos"]   = np.cos(2*np.pi*df_seq["Day_of_Week"]/7)
+                    df_input = df_seq
+
+                else:
+                    # ── FALLBACK: use CSV if fetch fails ──────────────────
+                    st.warning(f"Live sequence unavailable ({seq_err}) — using CSV fallback.")
+                    today     = datetime.date.today()
+                    cur_month = today.month
+                    cur_day   = today.day
+                    df_month  = df[(df["Month"] == cur_month) &
+                                   (df["Day"] <= cur_day)]
+                    df_input  = df_month if len(df_month) >= LB else df
+                    df_input  = df_input.copy()
+                    csv_last_temp = float(df_input["Temperature_C"].iloc[-1])
+                    t_offset  = temp - csv_last_temp
+                    df_input["Temperature_C"] = df_input["Temperature_C"] + t_offset
+                    df_input["Dew_Point_C"]   = df_input["Dew_Point_C"]   + t_offset
+
                 sel_ts = pd.Timestamp(
                     datetime.datetime.combine(date, datetime.time(hour)))
-
-                # Pick same month/day slice from CSV for temporal context
-                df_input = df[df["Month"] == sel_ts.month].copy()
-                if len(df_input) < LB:
-                    df_input = df.copy()
-
-                # Anchor: shift the CSV temperature sequence so it ends at
-                # the real observed temperature the user fetched from Open-Meteo
-                csv_last_temp = float(df_input["Temperature_C"].iloc[-1])
-                t_offset = temp - csv_last_temp
-                df_input["Temperature_C"] = df_input["Temperature_C"] + t_offset
-                df_input["Dew_Point_C"]   = df_input["Dew_Point_C"]   + t_offset
-
                 seq = build_seq(df_input, row, sx, LB, sel_ts=sel_ts)
                 t1h, t3h, t6h = run_predict(seq, sess, sy)
             else:

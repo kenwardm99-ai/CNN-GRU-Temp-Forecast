@@ -585,19 +585,38 @@ def main():
         else:
             lat, lon = coords[loc]
 
-        if st.button(" Fetch Weather Automatically"):
-            with st.spinner(f"Fetching {date} {hour}:00..."):
+        # Auto-refetch when date or hour changes and clear old predictions
+        current_key = f"{date}_{hour}_{lat}_{lon}"
+        if st.session_state.get("last_fetch_key") != current_key:
+            st.session_state.t1h = None
+            st.session_state.t3h = None
+            st.session_state.t6h = None
+            st.session_state.t0  = None
+            with st.spinner(f"Fetching {date} {hour:02d}:00..."):
                 data, err = fetch_weather(date, hour, lat, lon)
             if data:
-                st.session_state.fd      = data
-                st.session_state.fetched = True
-                st.session_state.status  = "ok"
+                st.session_state.fd             = data
+                st.session_state.fetched        = True
+                st.session_state.status         = "ok"
+                st.session_state.last_fetch_key = current_key
+            else:
+                st.session_state.fetched = False
+                st.session_state.status  = err
+
+        if st.button(" Fetch Weather Automatically"):
+            with st.spinner(f"Fetching {date} {hour:02d}:00..."):
+                data, err = fetch_weather(date, hour, lat, lon)
+            if data:
+                st.session_state.fd             = data
+                st.session_state.fetched        = True
+                st.session_state.status         = "ok"
+                st.session_state.last_fetch_key = current_key
             else:
                 st.session_state.fetched = False
                 st.session_state.status  = err
 
         if st.session_state.status == "ok":
-            st.success(" Weather fetched — fields auto-filled")
+            st.success(f" Weather auto-fetched for {date} at {hour:02d}:00")
         elif st.session_state.status:
             st.error(f" {st.session_state.status}")
 

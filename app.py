@@ -617,34 +617,44 @@ def main():
     if go:
         ts  = pd.Timestamp(datetime.datetime.combine(date, datetime.time(hour)))
         row = make_row(ts,temp,hum,wind,pres,solar,dew,rain,cloud)
-        with st.spinner("Running CNN-GRU model..."):
-            if ok and df is not None:
-                # Filter CSV to same month and day range as today
-                today     = datetime.date.today()
-                cur_month = today.month
-                cur_day   = today.day
-                df_month  = df[(df["Month"] == cur_month) &
-                               (df["Day"] <= cur_day)]
-                df_input  = df_month if len(df_month) >= LB else df
+        with st.spinner("Fetching real 7-day sequence & running CNN-GRU model..."):
+            if ok:
+                # ── PRIMARY: fetch real 168-hour sequence from Open-Meteo ──
+                df_seq, seq_err = fetch_sequence_from_meteo(
+                    date, hour, lat, lon, LB)
 
-                # Offset Temperature_C and Dew_Point_C so the sequence
-                # ends at the user's real observed temperature
-                df_input = df_input.copy()
-                csv_last_temp = float(df_input["Temperature_C"].iloc[-1])
-                t_offset = temp - csv_last_temp
-                df_input["Temperature_C"] = df_input["Temperature_C"] + t_offset
-                df_input["Dew_Point_C"]   = df_input["Dew_Point_C"]   + t_offset
+                if df_seq is not None and len(df_seq) >= LB:
+                    # Add cyclic time features to the real sequence
+                    df_seq["hour_sin"]  = np.sin(2*np.pi*df_seq["Hour"]/24)
+                    df_seq["hour_cos"]  = np.cos(2*np.pi*df_seq["Hour"]/24)
+                    df_seq["month_sin"] = np.sin(2*np.pi*df_seq["Month"]/12)
+                    df_seq["month_cos"] = np.cos(2*np.pi*df_seq["Month"]/12)
+                    df_seq["dow_sin"]   = np.sin(2*np.pi*df_seq["Day_of_Week"]/7)
+                    df_seq["dow_cos"]   = np.cos(2*np.pi*df_seq["Day_of_Week"]/7)
+                    df_input = df_seq
 
-                # Pass sel_ts so build_seq generates CORRECT hour/month/dow
-                # cyclic features for every position in the sequence.
-                # This ensures the model knows hour=15 is heading toward
-                # evening (falling temp), not midnight heading to afternoon.
+                else:
+                    # ── FALLBACK: use CSV if fetch fails ──────────────────
+                    st.warning(f"Live sequence unavailable ({seq_err}) — using CSV fallback.")
+                    today     = datetime.date.today()
+                    cur_month = today.month
+                    cur_day   = today.day
+                    df_month  = df[(df["Month"] == cur_month) &
+                                   (df["Day"] <= cur_day)]
+                    df_input  = df_month if len(df_month) >= LB else df
+                    df_input  = df_input.copy()
+                    csv_last_temp = float(df_input["Temperature_C"].iloc[-1])
+                    t_offset  = temp - csv_last_temp
+                    df_input["Temperature_C"] = df_input["Temperature_C"] + t_offset
+                    df_input["Dew_Point_C"]   = df_input["Dew_Point_C"]   + t_offset
+
                 sel_ts = pd.Timestamp(
                     datetime.datetime.combine(date, datetime.time(hour)))
                 seq = build_seq(df_input, row, sx, LB, sel_ts=sel_ts)
                 t1h, t3h, t6h = run_predict(seq, sess, sy)
             else:
                 t1h=temp+0.4; t3h=temp+1.2; t6h=temp+2.5
+
         st.session_state.t1h=t1h; st.session_state.t3h=t3h
         st.session_state.t6h=t6h; st.session_state.t0=temp
 
